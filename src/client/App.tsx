@@ -2,6 +2,8 @@ import { useCallback, useState } from 'react'
 import { EditorView, type EditorHandle } from './EditorView'
 import { StatusPill } from './StatusPill'
 import { FrontmatterCard } from './FrontmatterCard'
+import { Sidebar } from './Sidebar'
+import { HistoryPanel } from './HistoryPanel'
 import type { SyncStatus } from './useSync'
 import type { DocInfo } from '../shared/protocol'
 
@@ -20,16 +22,23 @@ export function App({ docId }: { docId: string }) {
   const [status, setStatus] = useState<SyncStatus>('connecting')
   const [frontmatter, setFrontmatter] = useState<string | null>(null)
   const [handle, setHandle] = useState<EditorHandle | null>(null)
+  const [showHistory, setShowHistory] = useState(false)
 
   const onFrontmatter = useCallback((fm: string | null) => setFrontmatter(fm), [])
 
   return (
     <div className="app">
-      <aside id="sidebar" className="sidebar" />
+      <aside id="sidebar" className="sidebar">
+        <Sidebar editor={handle?.editor ?? null} />
+      </aside>
       <main className="doc-column">
         <header className="doc-header">
           <StatusPill status={status} />
+          <button className="history-toggle" onClick={() => setShowHistory(v => !v)}>
+            history
+          </button>
         </header>
+        {showHistory && <HistoryPanel docId={docId} onClose={() => setShowHistory(false)} />}
         {status === 'file-missing' && (
           <div className="banner">The file was deleted or renamed on disk. Your buffer is still here; copy anything you need.</div>
         )}
