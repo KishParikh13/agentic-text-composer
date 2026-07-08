@@ -33,8 +33,9 @@ export class CommentStore {
       this.cache.set(docId, list)
       return list
     } catch {
-      this.cache.set(docId, [])
-      return []
+      const empty: Comment[] = []
+      this.cache.set(docId, empty)
+      return empty
     }
   }
 
