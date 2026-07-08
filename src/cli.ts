@@ -3,6 +3,7 @@ import { resolve, join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { readServerLock, isServerAlive } from './server/serverLock'
 import { installApp } from './server/installApp'
+import { pollEvents, formatEvents, formatComments } from './server/eventsClient'
 
 const here = dirname(fileURLToPath(import.meta.url))
 
@@ -24,8 +25,76 @@ const openBrowser = (url: string) => {
   execFile(cmd, [url], () => {})
 }
 
+// Ensure the server is up and the doc is open+watched; returns its id.
+async function openViaApi(file: string): Promise<{ port: number; id: string }> {
+  const port = await ensureServer()
+  const r = await fetch(`http://127.0.0.1:${port}/api/open`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ path: resolve(file) }),
+  })
+  const body = (await r.json()) as { id?: string; error?: string }
+  if (!r.ok) throw new Error(body.error)
+  return { port, id: body.id! }
+}
+
+const post = async (port: number, path: string, body: unknown) => {
+  const r = await fetch(`http://127.0.0.1:${port}${path}`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  if (!r.ok) throw new Error(((await r.json()) as any).error)
+  return r.json()
+}
+
+const flag = (args: string[], name: string): string | undefined =>
+  args.includes(name) ? args[args.indexOf(name) + 1] : undefined
+
 async function main() {
   const args = process.argv.slice(2)
+  if (args[0] === 'wait') {
+    const file = args[1]
+    if (!file) throw new Error('usage: compose wait <file.md> [--timeout <sec>] [--since <seq>]')
+    const { port, id } = await openViaApi(file)
+    const timeoutSec = Number(flag(args, '--timeout') ?? 3600)
+    const sinceArg = flag(args, '--since')
+    const since =
+      sinceArg !== undefined
+        ? Number(sinceArg)
+        : ((await (await fetch(`http://127.0.0.1:${port}/api/docs/${id}/events?since=0&waitMs=0`)).json()) as any).latest
+    const { events } = await pollEvents(port, id, since, timeoutSec * 1000)
+    if (!events.length) {
+      console.log(`no changes within ${timeoutSec}s`)
+      process.exit(2)
+    }
+    console.log(formatEvents(events, file))
+    return
+  }
+  if (args[0] === 'comments') {
+    const file = args[1]
+    if (!file) throw new Error('usage: compose comments <file.md>')
+    const { port, id } = await openViaApi(file)
+    const list = await (await fetch(`http://127.0.0.1:${port}/api/docs/${id}/comments`)).json()
+    console.log(formatComments(list))
+    return
+  }
+  if (args[0] === 'reply') {
+    const [, file, commentId, ...words] = args
+    if (!file || !commentId || !words.length) throw new Error('usage: compose reply <file.md> <commentId> <text...>')
+    const { port, id } = await openViaApi(file)
+    await post(port, `/api/docs/${id}/comments/${commentId}/replies`, { body: words.join(' '), author: 'agent' })
+    console.log(`replied to ${commentId}`)
+    return
+  }
+  if (args[0] === 'resolve') {
+    const [, file, commentId] = args
+    if (!file || !commentId) throw new Error('usage: compose resolve <file.md> <commentId>')
+    const { port, id } = await openViaApi(file)
+    await post(port, `/api/docs/${id}/comments/${commentId}/resolve`, {})
+    console.log(`resolved ${commentId}`)
+    return
+  }
   if (args[0] === '--serve') {
     if (args.includes('--port')) process.env.COMPOSE_PORT = args[args.indexOf('--port') + 1]
     const { buildServer } = await import('./server/app')
@@ -40,21 +109,15 @@ async function main() {
   }
   const file = args[0]
   if (!file || file.startsWith('-')) {
-    console.log('usage: compose <file.md> | compose --serve [--port N] | compose install-app')
+    console.log(
+      'usage: compose <file.md> | compose wait <file.md> [--timeout <sec>] [--since <seq>] |\n' +
+        '       compose comments <file.md> | compose reply <file.md> <id> <text...> | compose resolve <file.md> <id> |\n' +
+        '       compose --serve [--port N] | compose install-app',
+    )
     process.exit(1)
   }
-  const port = await ensureServer()
-  const r = await fetch(`http://127.0.0.1:${port}/api/open`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ path: resolve(file) }),
-  })
-  const body = (await r.json()) as { id?: string; error?: string }
-  if (!r.ok) {
-    console.error(`compose: ${body.error}`)
-    process.exit(1)
-  }
-  const url = `http://127.0.0.1:${port}/doc/${body.id}`
+  const { port, id } = await openViaApi(file)
+  const url = `http://127.0.0.1:${port}/doc/${id}`
   console.log(url)
   openBrowser(url)
 }
