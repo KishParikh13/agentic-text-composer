@@ -2,7 +2,7 @@
 
 A local, open source markdown composer for working on docs with a coding agent. You edit in a clean WYSIWYG editor in your browser. The agent edits the same file on disk with its normal file tools. Both stay in sync, live. No cloud, no accounts, no agent integration required.
 
-Inspired by [usecomposer.md](https://usecomposer.md), rebuilt around one idea: the file on disk is the source of truth.
+Inspired by [usecomposer.md](https://usecomposer.md), rebuilt around !!!! idea: the file on disk is the source of truth.
 
 ## Install
 
