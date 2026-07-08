@@ -2,7 +2,7 @@
 
 A local, open source markdown composer for working on docs with a coding agent. You edit in a clean WYSIWYG editor in your browser. The agent edits the same file on disk with its normal file tools. Both stay in sync, live. No cloud, no accounts, no agent integration required.
 
-Inspired by [usecomposer.md](https://usecomposer.md), rebuilt around !!!! idea: the file on disk is the source of truth.
+Inspired by [usecomposer.md](https://usecomposer.md), rebuilt around one idea: the file on disk is the source of truth.
 
 ## Install
 
@@ -34,9 +34,34 @@ Every change is snapshotted first. Click "history" in the doc header to preview 
 
 One caveat: the WYSIWYG editor serializes markdown its own way. The first time you edit a doc, formatting may normalize (bullet style, emphasis markers). Agent-only changes never touch the serializer.
 
+## Comments
+
+Select text in the editor and click Comment. The note lands in a rail on the right, quoting the text you selected. The agent reads it, replies, and resolves it from the CLI. Threads update live.
+
 ## For agents
 
-Nothing to configure. Read and write the markdown file like any other file. Writes should be atomic (write temp, rename) for clean diffs; most tools already do this.
+Read and write the markdown file like any other file. Writes should be atomic (write temp, rename) for clean diffs; most tools already do this.
+
+To get woken up when the human edits or comments, block on:
+
+```bash
+compose wait doc.md            # exits when the human saves or comments, prints what happened
+compose comments doc.md        # list open comments with ids
+compose reply doc.md <id> your reply text
+compose resolve doc.md <id>
+```
+
+`compose wait` prints a `--since` hint so the next wait picks up exactly where this one left off.
+
+Paste this into your agent instructions (CLAUDE.md or similar):
+
+```
+When collaborating on a doc through compose, run `compose wait <file>` as a
+background task. When it exits, read its output: apply requested edits to the
+file, answer comments with `compose reply <file> <id> <text>`, and mark them
+done with `compose resolve <file> <id>`. Then run the printed
+`compose wait <file> --since N` again and keep the loop going.
+```
 
 ## State
 

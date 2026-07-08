@@ -38,3 +38,42 @@ test('simultaneous edits both survive', async ({ page, request }) => {
   await expect.poll(() => readFileSync(p, 'utf8')).toContain('HUMAN-')
   await expect.poll(() => readFileSync(p, 'utf8')).toContain('AGENT-LINE')
 })
+
+test('typing emits a human-edit event the agent can poll', async ({ page, request }) => {
+  const { id } = await openDoc(request, '# Doc\n\nevent test\n')
+  await page.goto(`/doc/${id}`)
+  await page.locator('.editor-host .ProseMirror').click()
+  await page.keyboard.type('NOTIFY-ME ')
+  await expect
+    .poll(async () => {
+      const r = await request.get(`/api/docs/${id}/events?since=0&waitMs=0`)
+      const { events } = await r.json()
+      return events.map((e: any) => e.kind).join(',')
+    })
+    .toContain('human-edit')
+  const r = await request.get(`/api/docs/${id}/events?since=0&waitMs=0`)
+  const { events } = await r.json()
+  expect(events.find((e: any) => e.kind === 'human-edit').summary).toContain('NOTIFY-ME')
+})
+
+test('selection comment flows to api and agent reply appears in rail', async ({ page, request }) => {
+  const { id } = await openDoc(request, '# Doc\n\nselect this phrase please\n')
+  await page.goto(`/doc/${id}`)
+  const para = page.locator('.editor-host .ProseMirror p', { hasText: 'select this phrase' })
+  await para.dblclick() // selects a word
+  await expect(page.locator('.comment-bubble')).toBeVisible()
+  await page.locator('.comment-bubble').click()
+  await page.locator('.comment-compose textarea').fill('make this clearer')
+  await page.locator('.compose-actions .restore').click()
+  await expect(page.locator('.comment-list li')).toContainText('make this clearer')
+  const comments = await (await request.get(`/api/docs/${id}/comments`)).json()
+  expect(comments).toHaveLength(1)
+  await request.post(`/api/docs/${id}/comments/${comments[0].id}/replies`, {
+    data: { body: 'clarified it', author: 'agent' },
+  })
+  await expect(page.locator('.comment-list li')).toContainText('clarified it')
+  await page.locator('.comment-actions .rail-toggle').click() // resolve
+  await expect
+    .poll(async () => (await (await request.get(`/api/docs/${id}/comments`)).json())[0].resolved)
+    .toBe(true)
+})
