@@ -53,7 +53,13 @@ compose resolve doc.md <id>
 
 `compose wait` prints a `--since` hint so the next wait picks up exactly where this one left off.
 
-Paste this into your agent instructions (CLAUDE.md or similar):
+Claude Code users: copy the ready-made skill instead, then say "open this in a collab doc" in any session:
+
+```bash
+cp -r skills/collab-doc ~/.claude/skills/
+```
+
+Or paste this into your agent instructions (CLAUDE.md or similar):
 
 ```
 When collaborating on a doc through compose, run `compose wait <file>` as a
