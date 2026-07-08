@@ -4,8 +4,12 @@
   "description": "Local agentic markdown composer: WYSIWYG editor live-synced with a markdown file so humans and file-editing agents collaborate on one doc.",
   "license": "MIT",
   "type": "module",
-  "bin": { "compose": "dist/cli.js" },
-  "engines": { "node": ">=20" },
+  "bin": {
+    "compose": "dist/cli.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "build": "tsup && vite build",
     "dev": "vite",
@@ -14,11 +18,11 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@fastify/static": "^7.0.4",
+    "@fastify/static": "^8.3.0",
     "@fastify/websocket": "^11.0.1",
     "chokidar": "^3.6.0",
     "diff-match-patch": "^1.0.5",
-    "fastify": "^4.28.1"
+    "fastify": "^5.10.0"
   },
   "devDependencies": {
     "@playwright/test": "^1.48.0",
