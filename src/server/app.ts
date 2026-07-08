@@ -26,8 +26,10 @@ export async function buildServer() {
     for (const ws of sockets.get(docId) ?? []) if (ws !== except) send(ws, msg)
   }
 
-  const watchDoc = (doc: Doc) => {
-    if (watchers.has(doc.id)) return
+  // Resolves once the watcher is actually ready: /api/open must not return
+  // while there is still a window where an agent's write goes unseen.
+  const watchDoc = (doc: Doc): Promise<void> => {
+    if (watchers.has(doc.id)) return Promise.resolve()
     const w = chokidar.watch(doc.path, {
       ignoreInitial: true,
       awaitWriteFinish: { stabilityThreshold: 150, pollInterval: 20 },
@@ -43,6 +45,7 @@ export async function buildServer() {
     })
     w.on('unlink', () => broadcast(doc.id, { type: 'file-missing' }))
     watchers.set(doc.id, w)
+    return new Promise(res => w.once('ready', () => res()))
   }
 
   await fastify.register(websocket)
@@ -62,7 +65,7 @@ export async function buildServer() {
   fastify.post<{ Body: { path: string } }>('/api/open', async (req, reply) => {
     try {
       const doc = await registry.openDoc(req.body.path)
-      watchDoc(doc)
+      await watchDoc(doc)
       return { id: doc.id }
     } catch (e: any) {
       return reply.code(400).send({ error: e.message })
