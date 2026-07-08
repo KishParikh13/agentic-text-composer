@@ -77,3 +77,18 @@ test('selection comment flows to api and agent reply appears in rail', async ({ 
     .poll(async () => (await (await request.get(`/api/docs/${id}/comments`)).json())[0].resolved)
     .toBe(true)
 })
+
+test('agent comment appears in the rail, distinct and answerable', async ({ page, request }) => {
+  const { id } = await openDoc(request, '# Doc\n\na paragraph to question\n')
+  await request.post(`/api/docs/${id}/comments`, {
+    data: { anchorText: 'a paragraph to question', body: 'should this mention pricing?', author: 'agent' },
+  })
+  await page.goto(`/doc/${id}`)
+  const item = page.locator('.comment-list li.from-agent')
+  await expect(item).toContainText('should this mention pricing?')
+  await item.locator('.comment-actions input').fill('yes, add a pricing line')
+  await item.locator('.comment-actions input').press('Enter')
+  await expect(item).toContainText('yes, add a pricing line')
+  const events = await (await request.get(`/api/docs/${id}/events?since=0&waitMs=0`)).json()
+  expect(events.events.map((e: any) => e.kind)).toContain('comment-replied')
+})

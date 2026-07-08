@@ -87,6 +87,25 @@ it('comments round-trip with events and ws broadcast', async () => {
   expect(list[0].replies[0]).toMatchObject({ body: 'done', author: 'agent' })
   expect(list[0].resolved).toBe(true)
   const { events } = await (await api(`/api/docs/${id}/events?since=0&waitMs=0`)).json()
-  expect(events.map((e: any) => e.kind)).toEqual(['comment-added', 'comment-replied', 'comment-resolved'])
+  // the reply was agent-authored, so only the human-side actions appear
+  expect(events.map((e: any) => e.kind)).toEqual(['comment-added', 'comment-resolved'])
   ws.close()
+}, 10000)
+
+it('agent-authored comment activity emits no wake events', async () => {
+  const { id } = await openDoc('quiet doc\n')
+  const c = await (
+    await api(`/api/docs/${id}/comments`, { anchorText: 'quiet doc', body: 'suggest: expand?', author: 'agent' })
+  ).json()
+  await api(`/api/docs/${id}/comments/${c.id}/replies`, { body: 'noted', author: 'agent' })
+  await api(`/api/docs/${id}/comments/${c.id}/resolve`, { author: 'agent' })
+  const { latest } = await (await api(`/api/docs/${id}/events?since=0&waitMs=0`)).json()
+  expect(latest).toBe(0)
+  // human reply on the agent's comment DOES wake
+  const c2 = await (
+    await api(`/api/docs/${id}/comments`, { anchorText: '', body: 'question for you', author: 'agent' })
+  ).json()
+  await api(`/api/docs/${id}/comments/${c2.id}/replies`, { body: 'yes do it', author: 'you' })
+  const { events } = await (await api(`/api/docs/${id}/events?since=0&waitMs=0`)).json()
+  expect(events.map((e: any) => e.kind)).toEqual(['comment-replied'])
 }, 10000)

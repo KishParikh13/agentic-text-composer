@@ -47,9 +47,12 @@ To get woken up when the human edits or comments, block on:
 ```bash
 compose wait doc.md            # exits when the human saves or comments, prints what happened
 compose comments doc.md        # list open comments with ids
+compose comment doc.md --on "exact doc text" your question or suggestion
 compose reply doc.md <id> your reply text
 compose resolve doc.md <id>
 ```
+
+Agents can comment too: use `compose comment` to ask a question or float a suggestion without touching the text. It shows up in the rail marked as the agent's, anchored to the quoted text (omit `--on` for a whole-doc note). Replies from the human wake the agent's `wait`; the agent's own comments never wake itself.
 
 `compose wait` prints a `--since` hint so the next wait picks up exactly where this one left off.
 

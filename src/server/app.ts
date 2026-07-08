@@ -127,7 +127,9 @@ export async function buildServer() {
     async (req, reply) => {
       if (!registry.get(req.params.id)) return reply.code(404).send({ error: 'unknown doc' })
       const comment = await comments.add(req.params.id, req.body)
-      events.append(req.params.id, { kind: 'comment-added', comment })
+      // Events exist to wake a waiting agent, so agent-authored activity is
+      // not logged — otherwise the agent would wake itself.
+      if (req.body.author !== 'agent') events.append(req.params.id, { kind: 'comment-added', comment })
       await broadcastComments(req.params.id)
       return comment
     },
@@ -138,7 +140,8 @@ export async function buildServer() {
     async (req, reply) => {
       try {
         const r = await comments.reply(req.params.id, req.params.cid, req.body)
-        events.append(req.params.id, { kind: 'comment-replied', commentId: req.params.cid, reply: r })
+        if (req.body.author !== 'agent')
+          events.append(req.params.id, { kind: 'comment-replied', commentId: req.params.cid, reply: r })
         await broadcastComments(req.params.id)
         return r
       } catch (e: any) {
@@ -147,16 +150,20 @@ export async function buildServer() {
     },
   )
 
-  fastify.post<{ Params: { id: string; cid: string } }>('/api/docs/:id/comments/:cid/resolve', async (req, reply) => {
-    try {
-      await comments.resolve(req.params.id, req.params.cid)
-      events.append(req.params.id, { kind: 'comment-resolved', commentId: req.params.cid })
-      await broadcastComments(req.params.id)
-      return { ok: true }
-    } catch (e: any) {
-      return reply.code(404).send({ error: e.message })
-    }
-  })
+  fastify.post<{ Params: { id: string; cid: string }; Body: { author?: 'you' | 'agent' } }>(
+    '/api/docs/:id/comments/:cid/resolve',
+    async (req, reply) => {
+      try {
+        await comments.resolve(req.params.id, req.params.cid)
+        if (req.body?.author !== 'agent')
+          events.append(req.params.id, { kind: 'comment-resolved', commentId: req.params.cid })
+        await broadcastComments(req.params.id)
+        return { ok: true }
+      } catch (e: any) {
+        return reply.code(404).send({ error: e.message })
+      }
+    },
+  )
 
   fastify.register(async f => {
     f.get<{ Params: { id: string } }>('/ws/:id', { websocket: true }, (socket, req) => {

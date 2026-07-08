@@ -166,6 +166,9 @@ body {
   color: var(--muted); font-style: italic; cursor: pointer; font-size: 12px;
 }
 .comments-rail .unanchored { color: #c04a3a; font-style: normal; font-size: 11px; }
+.comments-rail .general { border-left-color: var(--line); }
+.comment-list li.from-agent { border-left: 3px solid var(--accent); }
+.comments-rail .author-agent { color: var(--accent); }
 .comments-rail p { margin: 4px 0; }
 .comments-rail .reply { padding-left: 10px; border-left: 2px solid var(--line); }
 .comments-rail textarea {

@@ -79,6 +79,26 @@ async function main() {
     console.log(formatComments(list))
     return
   }
+  if (args[0] === 'comment') {
+    const file = args[1]
+    let rest = args.slice(2)
+    let anchorText = ''
+    const onIdx = rest.indexOf('--on')
+    if (onIdx >= 0) {
+      anchorText = rest[onIdx + 1] ?? ''
+      rest = [...rest.slice(0, onIdx), ...rest.slice(onIdx + 2)]
+    }
+    if (!file || !rest.length)
+      throw new Error('usage: compose comment <file.md> [--on "<exact doc text>"] <text...>')
+    const { port, id } = await openViaApi(file)
+    const c = (await post(port, `/api/docs/${id}/comments`, {
+      anchorText,
+      body: rest.join(' '),
+      author: 'agent',
+    })) as { id: string }
+    console.log(`commented ${c.id}${anchorText ? ` on "${anchorText}"` : ' (general)'}`)
+    return
+  }
   if (args[0] === 'reply') {
     const [, file, commentId, ...words] = args
     if (!file || !commentId || !words.length) throw new Error('usage: compose reply <file.md> <commentId> <text...>')
@@ -91,7 +111,7 @@ async function main() {
     const [, file, commentId] = args
     if (!file || !commentId) throw new Error('usage: compose resolve <file.md> <commentId>')
     const { port, id } = await openViaApi(file)
-    await post(port, `/api/docs/${id}/comments/${commentId}/resolve`, {})
+    await post(port, `/api/docs/${id}/comments/${commentId}/resolve`, { author: 'agent' })
     console.log(`resolved ${commentId}`)
     return
   }
@@ -111,7 +131,8 @@ async function main() {
   if (!file || file.startsWith('-')) {
     console.log(
       'usage: compose <file.md> | compose wait <file.md> [--timeout <sec>] [--since <seq>] |\n' +
-        '       compose comments <file.md> | compose reply <file.md> <id> <text...> | compose resolve <file.md> <id> |\n' +
+        '       compose comments <file.md> | compose comment <file.md> [--on "<text>"] <text...> |\n' +
+        '       compose reply <file.md> <id> <text...> | compose resolve <file.md> <id> |\n' +
         '       compose --serve [--port N] | compose install-app',
     )
     process.exit(1)

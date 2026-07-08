@@ -101,17 +101,21 @@ export function CommentsRail({
         {visible.map(c => {
           const anchored = editor ? !!findInDoc(editor, c.anchorText) : true
           return (
-            <li key={c.id} className={c.resolved ? 'resolved' : ''}>
-              <blockquote onClick={() => jumpTo(c)} title={anchored ? 'jump to text' : 'original text was edited away'}>
-                {c.anchorText.length > 80 ? `${c.anchorText.slice(0, 80)}…` : c.anchorText}
-                {!anchored && <span className="unanchored"> (text changed)</span>}
-              </blockquote>
+            <li key={c.id} className={[c.resolved ? 'resolved' : '', c.author === 'agent' ? 'from-agent' : ''].join(' ')}>
+              {c.anchorText ? (
+                <blockquote onClick={() => jumpTo(c)} title={anchored ? 'jump to text' : 'original text was edited away'}>
+                  {c.anchorText.length > 80 ? `${c.anchorText.slice(0, 80)}…` : c.anchorText}
+                  {!anchored && <span className="unanchored"> (text changed)</span>}
+                </blockquote>
+              ) : (
+                <blockquote className="general">whole doc</blockquote>
+              )}
               <p>
-                <strong>{c.author}:</strong> {c.body}
+                <strong className={`author-${c.author}`}>{c.author}:</strong> {c.body}
               </p>
               {c.replies.map((r, i) => (
                 <p key={i} className="reply">
-                  <strong>{r.author}:</strong> {r.body}
+                  <strong className={`author-${r.author}`}>{r.author}:</strong> {r.body}
                 </p>
               ))}
               {!c.resolved && (
@@ -124,7 +128,7 @@ export function CommentsRail({
                       if (e.key === 'Enter') submitReply(c.id)
                     }}
                   />
-                  <button className="rail-toggle" onClick={() => post(`/comments/${c.id}/resolve`, {})}>
+                  <button className="rail-toggle" onClick={() => post(`/comments/${c.id}/resolve`, { author: 'you' })}>
                     resolve
                   </button>
                 </div>

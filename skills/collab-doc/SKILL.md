@@ -28,6 +28,10 @@ Open a markdown file in Compose, the local live editor from this repo. The user 
 ## Rules
 
 - Edit the doc by editing the file normally. Changes appear in their editor live, highlighted.
+- Not sure about a change, or have a question or suggestion? Do not edit. Leave a comment instead:
+  `compose comment <file> --on "<exact text from the doc>" <your question or suggestion>`
+  (omit `--on` for a whole-doc note). Their reply in the UI wakes your wait loop.
+- Edit directly only when the change was asked for or is safe to assume.
 - Your own file writes emit no events, so you will not wake yourself.
 - Reply before resolving. Resolve only after the work is done.
 - Exit code 2 means timeout with no activity: re-arm silently, do not message the user.
