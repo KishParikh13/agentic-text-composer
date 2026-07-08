@@ -11,6 +11,9 @@ import { DocRegistry, type Doc } from './registry'
 import { handleClientSave, handleExternalChange } from './sync'
 import { listSnapshots, readSnapshot } from './history'
 import { stateDir } from './paths'
+import { EventLog } from './events'
+import { CommentStore } from './comments'
+import { summarizeDiff } from './diffSummary'
 import type { ClientMsg } from '../shared/protocol'
 
 export async function buildServer() {
@@ -18,6 +21,8 @@ export async function buildServer() {
   const registry = new DocRegistry()
   const sockets = new Map<string, Set<WebSocket>>()
   const watchers = new Map<string, FSWatcher>()
+  const events = new EventLog()
+  const comments = new CommentStore()
 
   const send = (ws: WebSocket, msg: unknown) => {
     if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(msg))
@@ -91,9 +96,66 @@ export async function buildServer() {
     const doc = registry.get(req.params.id)
     if (!doc) return reply.code(404).send({ error: 'unknown doc' })
     const text = await readSnapshot(req.params.id, req.body.file)
+    const prev = doc.canonicalText
     const msg = await handleClientSave(doc, text)
-    if (msg.type === 'patch') broadcast(doc.id, msg)
+    if (msg.type === 'patch') {
+      broadcast(doc.id, msg)
+      events.append(doc.id, { kind: 'human-edit', summary: summarizeDiff(prev, text) })
+    }
     return { ok: true }
+  })
+
+  fastify.get<{ Params: { id: string }; Querystring: { since?: string; waitMs?: string } }>(
+    '/api/docs/:id/events',
+    async (req, reply) => {
+      if (!registry.get(req.params.id)) return reply.code(404).send({ error: 'unknown doc' })
+      const since = Number(req.query.since ?? 0)
+      const waitMs = Math.min(Number(req.query.waitMs ?? 25000), 30000)
+      const found = waitMs > 0 ? await events.waitFor(req.params.id, since, waitMs) : events.since(req.params.id, since)
+      return { events: found, latest: events.latest(req.params.id) }
+    },
+  )
+
+  const broadcastComments = async (docId: string) => {
+    broadcast(docId, { type: 'comments', comments: await comments.list(docId) })
+  }
+
+  fastify.get<{ Params: { id: string } }>('/api/docs/:id/comments', async req => comments.list(req.params.id))
+
+  fastify.post<{ Params: { id: string }; Body: { anchorText: string; body: string; author: 'you' | 'agent' } }>(
+    '/api/docs/:id/comments',
+    async (req, reply) => {
+      if (!registry.get(req.params.id)) return reply.code(404).send({ error: 'unknown doc' })
+      const comment = await comments.add(req.params.id, req.body)
+      events.append(req.params.id, { kind: 'comment-added', comment })
+      await broadcastComments(req.params.id)
+      return comment
+    },
+  )
+
+  fastify.post<{ Params: { id: string; cid: string }; Body: { body: string; author: 'you' | 'agent' } }>(
+    '/api/docs/:id/comments/:cid/replies',
+    async (req, reply) => {
+      try {
+        const r = await comments.reply(req.params.id, req.params.cid, req.body)
+        events.append(req.params.id, { kind: 'comment-replied', commentId: req.params.cid, reply: r })
+        await broadcastComments(req.params.id)
+        return r
+      } catch (e: any) {
+        return reply.code(404).send({ error: e.message })
+      }
+    },
+  )
+
+  fastify.post<{ Params: { id: string; cid: string } }>('/api/docs/:id/comments/:cid/resolve', async (req, reply) => {
+    try {
+      await comments.resolve(req.params.id, req.params.cid)
+      events.append(req.params.id, { kind: 'comment-resolved', commentId: req.params.cid })
+      await broadcastComments(req.params.id)
+      return { ok: true }
+    } catch (e: any) {
+      return reply.code(404).send({ error: e.message })
+    }
   })
 
   fastify.register(async f => {
@@ -109,9 +171,13 @@ export async function buildServer() {
       socket.on('message', async (raw: Buffer) => {
         const msg = JSON.parse(raw.toString()) as ClientMsg
         if (msg.type === 'save') {
+          const prev = doc.canonicalText
           const out = await handleClientSave(doc, msg.text)
           send(socket, { type: 'saved', hash: out.type === 'patch' || out.type === 'saved' ? out.hash : '' })
-          if (out.type === 'patch') broadcast(doc.id, out, socket)
+          if (out.type === 'patch') {
+            broadcast(doc.id, out, socket)
+            events.append(doc.id, { kind: 'human-edit', summary: summarizeDiff(prev, msg.text) })
+          }
         }
       })
       socket.on('close', () => sockets.get(doc.id)?.delete(socket))

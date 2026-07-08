@@ -3,6 +3,7 @@ export type ServerMsg =
   | { type: 'patch'; patchText: string; fullText: string; hash: string; source: 'external' | 'client' }
   | { type: 'saved'; hash: string }
   | { type: 'file-missing' }
+  | { type: 'comments'; comments: unknown[] }
 
 export type ClientMsg = { type: 'save'; text: string }
 
