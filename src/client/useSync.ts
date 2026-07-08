@@ -20,6 +20,7 @@ export interface SyncOpts {
   makeSocket: () => WebSocketLike
   onStatus: (s: SyncStatus) => void
   onFrontmatter: (fm: string | null) => void
+  onComments?: (comments: unknown[]) => void
   debounceMs?: number
 }
 
@@ -102,6 +103,10 @@ export function createSyncController(opts: SyncOpts) {
     }
     if (msg.type === 'file-missing') {
       opts.onStatus('file-missing')
+      return
+    }
+    if (msg.type === 'comments') {
+      opts.onComments?.(msg.comments)
     }
   }
 

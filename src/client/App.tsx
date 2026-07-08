@@ -1,11 +1,13 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { EditorView, type EditorHandle } from './EditorView'
 import { StatusPill } from './StatusPill'
 import { FrontmatterCard } from './FrontmatterCard'
 import { Sidebar } from './Sidebar'
 import { HistoryPanel } from './HistoryPanel'
+import { CommentsRail } from './CommentsRail'
 import type { SyncStatus } from './useSync'
 import type { DocInfo } from '../shared/protocol'
+import type { Comment } from '../server/comments'
 
 export const openAndGo = async (path: string) => {
   const r = await fetch('/api/open', {
@@ -23,11 +25,23 @@ export function App({ docId }: { docId: string }) {
   const [frontmatter, setFrontmatter] = useState<string | null>(null)
   const [handle, setHandle] = useState<EditorHandle | null>(null)
   const [showHistory, setShowHistory] = useState(false)
+  const [comments, setComments] = useState<Comment[]>([])
+  const [pendingAnchor, setPendingAnchor] = useState<string | null>(null)
 
   const onFrontmatter = useCallback((fm: string | null) => setFrontmatter(fm), [])
+  const onComments = useCallback((c: unknown[]) => setComments(c as Comment[]), [])
+
+  useEffect(() => {
+    fetch(`/api/docs/${docId}/comments`)
+      .then(r => r.json())
+      .then(c => Array.isArray(c) && setComments(c))
+      .catch(() => {})
+  }, [docId])
+
+  const railVisible = comments.length > 0 || pendingAnchor !== null
 
   return (
-    <div className="app">
+    <div className={railVisible ? 'app app-with-rail' : 'app'}>
       <aside id="sidebar" className="sidebar">
         <Sidebar editor={handle?.editor ?? null} />
       </aside>
@@ -49,8 +63,24 @@ export function App({ docId }: { docId: string }) {
             handle?.setFrontmatter(fm)
           }}
         />
-        <EditorView docId={docId} onReady={setHandle} onStatus={setStatus} onFrontmatter={onFrontmatter} />
+        <EditorView
+          docId={docId}
+          onReady={setHandle}
+          onStatus={setStatus}
+          onFrontmatter={onFrontmatter}
+          onComments={onComments}
+          onCommentAnchor={setPendingAnchor}
+        />
       </main>
+      {railVisible && (
+        <CommentsRail
+          docId={docId}
+          comments={comments}
+          editor={handle?.editor ?? null}
+          pendingAnchor={pendingAnchor}
+          onClearPendingAnchor={() => setPendingAnchor(null)}
+        />
+      )}
     </div>
   )
 }
